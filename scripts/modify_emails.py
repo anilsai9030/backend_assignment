@@ -92,50 +92,44 @@ def fetch_data_from_db(rules, service):
     :return: None
     """
     try:
-        for rule in rules.get("rules"):
+        for rule in rules.get("rules", []):
             query = session.query(Email.message_id)
             condition_list = []
-            for condition in rule.get("conditions"):
+            for condition in rule.get("conditions", []):
                 field = condition.get("field")
                 predicate = condition.get("predicate")
                 value = condition.get("value")
                 column = getattr(Email, field)
 
                 if predicate == "contains":
-                    query = query.filter(column.like(f"%{value}%"))
+                    condition = column.like(f"%{value}%")
                 elif predicate == "does not contain":
-                    query = query.filter(column.notlike(f"%{value}%"))
+                    condition = column.notlike(f"%{value}%")
                 elif predicate == "equals":
-                    query = query.filter(column == value)
+                    condition = column == value
                 elif predicate == "does not equal":
-                    query = query.filter(column != value)
+                    condition = column != value
                 elif "days" in predicate:
                     days = int(value)
                     date_threshold = datetime.now() - timedelta(days=days)
                     millis = datetime_to_milliseconds(date_threshold)
-                    if "less than" in predicate:
-                        query = query.filter(column < millis)
-                    elif "greater than" in predicate:
-                        query = query.filter(column > millis)
+                    condition = column < millis if "less than" in predicate else column > millis
                 elif "months" in predicate:
                     months = int(value)
                     date_threshold = datetime.now() - relativedelta(months=months)
                     millis = datetime_to_milliseconds(date_threshold)
-                    if "less than" in predicate:
-                        query = query.filter(column < millis)
-                    elif "greater than" in predicate:
-                        query = query.filter(column > millis)
+                    condition = column < millis if "less than" in predicate else column > millis
+                condition_list.append(condition)
 
-            if rule['logic'] == "All":
+            if rule.get('logic') == "All":
                 query = query.filter(and_(*condition_list))
-            elif rule['logic'] == "Any":
+            elif rule.get('logic') == "Any":
                 query = query.filter(or_(*condition_list))
-            logger.info(f"Final Query: {str(query)}")
+
             message_ids = [email.message_id for email in query.all()]
             if message_ids:
-                logger.info("Email IDs to modify: ", message_ids)
                 execute_actions(message_ids, rule["actions"], service)
             else:
-                logger.error("No emails found for the given conditions")
+                logger.info("No emails found for the given conditions")
     except Exception as error:
         logger.error(f"Error occurred while fetching data from the database: {error}", exc_info=True)

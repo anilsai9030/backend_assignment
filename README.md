@@ -51,6 +51,7 @@ messages IDS , from_email, subject, dateReceived in DB.
 1) After downloading the required credentials.json file and installing the required libraries.
 2) And after adding the required emails in the console configuration.
 3) Install the requirements.txt file by running the following command:
-   pip install -r requirements.txt
+   1) pip install -r requirements.txt
 4) You can run the script by running the following command:
-   python main.py
+   1) python main.py ---> for fetching the messages from the inbox and storing the required fields in the DB.
+   2) python main.py --apply-rules ---> for fetching the messages from the DB and applying the rules mentioned in the rules.json file.
