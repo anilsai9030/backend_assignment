@@ -1,10 +1,12 @@
 import json
+import logging
 import time
 from sqlalchemy.orm import sessionmaker
 from database.db_utils import engine, Email
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import and_, or_
+from utils.logging_config import logger
 
 Session = sessionmaker(bind=engine)
 session = Session()
@@ -13,9 +15,9 @@ session = Session()
 def create_folder(service, folder_name):
     """
     Creates a new folder in the user's Gmail account.
-    :param service:
-    :param folder_name:
-    :return: folder_id
+    :param service: Authorized Gmail API service instance
+    :param folder_name: Name of the folder to be created
+    :return: id/lablel of the created folder
     """
     body = {
         "name": folder_name,
@@ -29,8 +31,8 @@ def create_folder(service, folder_name):
 def check_folder_exists(service, folder_name):
     """
     Checks if the folder exists in the user's Gmail account.
-    :param service:
-    :param folder_name:
+    :param service: Authorized Gmail API service instance
+    :param folder_name: Name of the folder to be checked
     :return: id if present else None
     """
     folders = service.users().labels().list(userId="me").execute()
@@ -44,10 +46,10 @@ def check_folder_exists(service, folder_name):
 def execute_actions(message_ids, actions, service):
     """
     Executes the actions on the emails.
-    :param message_ids:
-    :param actions:
-    :param service:
-    :return:
+    :param message_ids: List of message ids
+    :param actions: List of actions to be performed
+    :param service: Authorized Gmail API service instance
+    :return: None
     """
     body = {
         "addLabelIds": [],
@@ -84,53 +86,56 @@ def datetime_to_milliseconds(dt):
 
 def fetch_data_from_db(rules, service):
     """
-    Fetches the data from the database based on the rules and executes the actions.
-    :param rules:
-    :param service:
-    :return:
+    Fetches the data from the database based on the rules and executes the actions further
+    :param rules: List of rules to be applied
+    :param service: Authorized Gmail API service instance
+    :return: None
     """
-    for rule in rules.get("rules"):
-        query = session.query(Email.id)
-        condition_list = []
-        for condition in rule.get("conditions"):
-            field = condition.get("field")
-            predicate = condition.get("predicate")
-            value = condition.get("value")
-            column = getattr(Email, field)
+    try:
+        for rule in rules.get("rules"):
+            query = session.query(Email.message_id)
+            condition_list = []
+            for condition in rule.get("conditions"):
+                field = condition.get("field")
+                predicate = condition.get("predicate")
+                value = condition.get("value")
+                column = getattr(Email, field)
 
-            if predicate == "contains":
-                query = query.filter(column.like(f"%{value}%"))
-            elif predicate == "does not contain":
-                query = query.filter(column.notlike(f"%{value}%"))
-            elif predicate == "equals":
-                query = query.filter(column == value)
-            elif predicate == "does not equal":
-                query = query.filter(column != value)
-            elif "days" in predicate:
-                days = int(value)
-                date_threshold = datetime.now() - timedelta(days=days)
-                millis = datetime_to_milliseconds(date_threshold)
-                if "less than" in predicate:
-                    query = query.filter(column < millis)
-                elif "greater than" in predicate:
-                    query = query.filter(column > millis)
-            elif "months" in predicate:
-                months = int(value)
-                date_threshold = datetime.now() - relativedelta(months=months)
-                millis = datetime_to_milliseconds(date_threshold)
-                if "less than" in predicate:
-                    query = query.filter(column < millis)
-                elif "greater than" in predicate:
-                    query = query.filter(column > millis)
+                if predicate == "contains":
+                    query = query.filter(column.like(f"%{value}%"))
+                elif predicate == "does not contain":
+                    query = query.filter(column.notlike(f"%{value}%"))
+                elif predicate == "equals":
+                    query = query.filter(column == value)
+                elif predicate == "does not equal":
+                    query = query.filter(column != value)
+                elif "days" in predicate:
+                    days = int(value)
+                    date_threshold = datetime.now() - timedelta(days=days)
+                    millis = datetime_to_milliseconds(date_threshold)
+                    if "less than" in predicate:
+                        query = query.filter(column < millis)
+                    elif "greater than" in predicate:
+                        query = query.filter(column > millis)
+                elif "months" in predicate:
+                    months = int(value)
+                    date_threshold = datetime.now() - relativedelta(months=months)
+                    millis = datetime_to_milliseconds(date_threshold)
+                    if "less than" in predicate:
+                        query = query.filter(column < millis)
+                    elif "greater than" in predicate:
+                        query = query.filter(column > millis)
 
-        if rule['logic'] == "All":
-            query = query.filter(and_(*condition_list))
-        elif rule['logic'] == "Any":
-            query = query.filter(or_(*condition_list))
-        print("Final Query: ", str(query))
-        message_ids = [email.id for email in query.all()]
-        if message_ids:
-            print("Email IDs to modify: ", message_ids)
-            execute_actions(message_ids, rule["actions"], service)
-        else:
-            print("No emails found for the given conditions")
+            if rule['logic'] == "All":
+                query = query.filter(and_(*condition_list))
+            elif rule['logic'] == "Any":
+                query = query.filter(or_(*condition_list))
+            logger.info(f"Final Query: {str(query)}")
+            message_ids = [email.message_id for email in query.all()]
+            if message_ids:
+                logger.info("Email IDs to modify: ", message_ids)
+                execute_actions(message_ids, rule["actions"], service)
+            else:
+                logger.error("No emails found for the given conditions")
+    except Exception as error:
+        logger.error(f"Error occurred while fetching data from the database: {error}", exc_info=True)

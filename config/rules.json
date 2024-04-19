@@ -5,7 +5,7 @@
       "conditions": [
         {"field":  "from_email", "predicate":  "contains", "value": "@amazonaws.com"},
         {"field":  "subject", "predicate":  "does not contain", "value":  "amazon"},
-        {"field": "date_received", "predicate":  "greater than days", "value": 2}
+        {"field": "date_received", "predicate":  "greater than days", "value": 4}
       ],
       "actions": [
         {"action":  "mark_as_unread"},
