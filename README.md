@@ -45,3 +45,12 @@ messages IDS , from_email, subject, dateReceived in DB.
            2) mark_as_unread --> The message will be marked as unread.
            3) move_message --> The message will be moved to the folder mentioned in the following value.
               1) folder_name --> The folder name to which the message is to be moved.
+
+
+# Running the script
+1) After downloading the required credentials.json file and installing the required libraries.
+2) And after adding the required emails in the console configuration.
+3) Install the requirements.txt file by running the following command:
+   pip install -r requirements.txt
+4) You can run the script by running the following command:
+   python main.py
